@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/clubapply-banner.svg" alt="ClubApply — Find your fit. Tell your story." width="100%" />
+  <img src="docs/images/clubapply-hero.png" alt="ClubApply: the club details form on the left, and generated answer guidance, structure tips and resume edits on the right." width="100%" />
 </p>
 
 <h1 align="center">ClubApply</h1>
@@ -7,16 +7,16 @@
 <p align="center">An AI-assisted workspace for university club applications, resume preparation, and interviews.</p>
 
 <p align="center">
-  <a href="https://main.d8qdpc5eyzotl.amplifyapp.com/">Open the live app</a> ·
+  <a href="https://clubapply.vercel.app">Open the live app</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="#run-locally">Run locally</a> ·
-  <a href="docs/AMPLIFY.md">AWS deployment</a>
+  <a href="#deployment">Deployment</a>
 </p>
 
 <p align="center">
   <img alt="Built for AWS × Bruin AI" src="https://img.shields.io/badge/BUILT_FOR-AWS_%C3%97_BRUIN_AI-e0b45c?style=for-the-badge" />
-  <img alt="Frontend: React" src="https://img.shields.io/badge/FRONTEND-REACT-61dafb?style=for-the-badge" />
-  <img alt="Backend: FastAPI" src="https://img.shields.io/badge/BACKEND-FASTAPI-009688?style=for-the-badge" />
+  <img alt="Frontend: React on Vercel" src="https://img.shields.io/badge/FRONTEND-REACT_ON_VERCEL-61dafb?style=for-the-badge" />
+  <img alt="Backend: FastAPI on AWS Lambda" src="https://img.shields.io/badge/BACKEND-FASTAPI_ON_LAMBDA-009688?style=for-the-badge" />
 </p>
 
 ---
@@ -27,7 +27,7 @@ Applying to a university club can mean piecing together a website, an Instagram 
 
 **ClubApply brings that preparation into one workflow.** Students provide the club they are interested in, their experience, and the questions they need to answer. The application researches available club sources and produces a club overview, application guidance, resume suggestions, and optional interview preparation.
 
-Originally built for the **AWS × Bruin AI Hackathon at UCLA in October 2025**, the project now includes a React frontend on AWS Amplify Hosting and a container-based FastAPI backend on AWS Lambda.
+Originally built for the **AWS × Bruin AI Hackathon at UCLA in October 2025**, the project now runs a React frontend on Vercel and a container-based FastAPI backend on AWS Lambda.
 
 ## From interest to application
 
@@ -39,71 +39,96 @@ Originally built for the **AWS × Bruin AI Hackathon at UCLA in October 2025**, 
 
 The interface supports **online applications**, **coffee chats/networking**, and **interview preparation**. Results include expandable sections for the club brief, answer structure, and resume suggestions.
 
-**Try it:** [Open ClubApply](https://main.d8qdpc5eyzotl.amplifyapp.com/), enter a club and your experience, then add a question such as “Why do you want to join this club?” You can try the workflow without a resume by entering experience manually. Supplied source URLs enrich the research; missing or inaccessible sources limit what the app can learn.
+**Try it:** [Open ClubApply](https://clubapply.vercel.app), enter a club and your experience, then add a question such as “Why do you want to join this club?” You can try the workflow without a resume by entering experience manually. Supplied source URLs enrich the research; missing or inaccessible sources limit what the app can learn.
+
+### What comes back
+
+<p align="center">
+  <img src="docs/images/clubapply-results.png" alt="Generated results: a drafted answer, structure and do/don't tips, and tailored resume bullets referencing the applicant's own projects." width="720" />
+</p>
+
+Every section is generated against the club brief **and** your own experience — the tailored bullets above quote the applicant's actual dataset size and model score rather than generic filler. The `About these results` panel states what the run could not reach, so weak sources are visible instead of silently degrading the output.
 
 ## Architecture
 
-The frontend is delivered to the browser by Amplify. The browser sends HTTPS requests to a Lambda Function URL, where Mangum adapts the incoming event for FastAPI. Python coordinates research and coaching, then returns JSON for React to display.
+Vercel serves the React build to the browser. The browser sends HTTPS requests to a Lambda Function URL, where Mangum adapts the incoming event for FastAPI. Python coordinates research and coaching, then returns JSON for React to display.
 
 ```mermaid
 flowchart TB
-    subgraph Delivery[Build and deployment]
-        Git[GitHub main branch] -->|Automatic frontend build| Amplify[AWS Amplify Hosting]
-        Docker[Backend Docker image] -->|Push image| ECR[Amazon ECR]
+    subgraph SHIP["Getting it deployed"]
+        direction LR
+        GH["GitHub · main"] -->|"push"| VER["Vercel<br/>npm ci → npm run build"]
+        LOCAL["docker build<br/>(run by hand)"] -->|"push image"| ECR[("Amazon ECR")]
     end
 
-    Amplify -->|HTML, CSS and JavaScript| Browser[Student browser / React]
-    Browser -->|HTTPS API requests| URL[Lambda Function URL]
+    VER -->|"static HTML, CSS, JS"| BR["Student browser<br/>React single-page app"]
 
-    subgraph Backend[AWS Lambda]
-        URL --> Adapter[Mangum adapter]
-        Adapter --> API[FastAPI API]
-        API --> Workflow[Research and coaching workflow]
+    subgraph RUN["AWS Lambda · us-east-1"]
+        direction TB
+        FU["Function URL"] --> MG["Mangum<br/>event → ASGI"]
+        MG --> API["FastAPI"]
+        API --> WF["Research + coaching workflow"]
     end
 
-    ECR -.->|Image used by Lambda deployment| Adapter
-    Workflow --> Sources[Public club website / Instagram]
-    Workflow --> Models[Model adapters / Bedrock, OpenAI, Gemini]
-    Workflow -->|Structured results| API
-    API -->|JSON response| Browser
+    BR -->|"HTTPS request"| FU
+    ECR -.->|"image the function runs"| MG
+    WF --> SRC["Public club website<br/>+ Instagram"]
+    WF --> LLM["OpenAI · Gemini · Bedrock"]
+    API -->|"JSON response"| BR
 
-    classDef aws fill:#fff3dc,stroke:#c78923,color:#172538;
-    classDef app fill:#e8f2ff,stroke:#527aab,color:#172538;
-    class Amplify,ECR,URL aws;
-    class Browser,API,Workflow,Adapter app;
+    classDef edge fill:#f6d68a,stroke:#a7791b,color:#1d2433;
+    classDef core fill:#cfe0f5,stroke:#3f6795,color:#1d2433;
+    classDef ext  fill:#e4e6ea,stroke:#7a8290,color:#1d2433;
+    class VER,FU,ECR,MG edge;
+    class BR,API,WF core;
+    class SRC,LLM,GH,LOCAL ext;
 ```
 
-**Two independent deployment paths:** a push to `main` triggers the Amplify frontend build. Backend changes require building a Docker image, pushing it to ECR, and updating Lambda. A Git push alone does not redeploy Python.
+**Two independent deployment paths.** A push to `main` rebuilds the frontend on Vercel automatically. The backend does not: changing Python means rebuilding the Docker image, pushing it to ECR, and updating the Lambda function. A Git push alone never redeploys the API.
 
 ### Inside a guidance request
 
 The active web interface calls `/agents/application-coach`. Research sources run concurrently. Once a club brief is available, application and resume coaching run concurrently, with interview preparation added for the relevant application stages.
 
 ```mermaid
-flowchart TD
-    Club[Club details and optional source URLs] --> Web[Website research]
-    Club --> IG[Instagram research]
-    Web --> Brief[Shared ClubBrief]
-    IG --> Brief
-    Description[Provided description when no sources are supplied] --> Brief
+flowchart TB
+    subgraph IN["What you provide"]
+        CLUB["Club, school, role, stage<br/>+ optional website / Instagram"]
+        EXP["PDF resume<br/>or typed experience"]
+        QS["Application questions"]
+    end
 
-    PDF[PDF resume] --> Extract[Extract resume text]
-    Manual[Manually entered experience] --> Experience[Applicant context]
-    Extract --> Experience
+    CLUB --> WEB["Website research"]
+    CLUB --> IG["Instagram research"]
+    WEB -->|"run concurrently"| BRIEF
+    IG  --> BRIEF
+    BRIEF["Shared ClubBrief<br/>overview · values · what they look for"]
 
-    Brief --> Application[Application coach]
-    Brief --> Resume[Resume tailor]
-    Brief --> Interview[Interview coach / optional]
-    Experience --> Application
-    Experience --> Resume
-    Experience --> Interview
-    Questions[Application questions] --> Application
+    EXP --> TEXT["Resume text<br/>extracted in memory"]
 
-    Application --> Result[Guidance, resume edits, preparation and source warnings]
-    Resume --> Result
-    Interview --> Result
-    Result --> UI[React results view]
+    BRIEF --> AC["Application coach"]
+    BRIEF --> RT["Resume tailor"]
+    BRIEF --> IC["Interview coach<br/>(stage-dependent)"]
+    TEXT --> AC
+    TEXT --> RT
+    TEXT --> IC
+    QS --> AC
+
+    AC -->|"run concurrently"| OUT
+    RT --> OUT
+    IC --> OUT
+    OUT["Answer guidance · resume edits<br/>interview prep · source warnings"]
+    OUT --> UI["React results view"]
+
+    classDef inp  fill:#e4e6ea,stroke:#7a8290,color:#1d2433;
+    classDef work fill:#cfe0f5,stroke:#3f6795,color:#1d2433;
+    classDef key  fill:#f6d68a,stroke:#a7791b,color:#1d2433;
+    class CLUB,EXP,QS inp;
+    class WEB,IG,AC,RT,IC,TEXT work;
+    class BRIEF,OUT,UI key;
 ```
+
+Every model call goes through one shared adapter that tries providers in order — **Gemini → OpenAI → Bedrock** — each capped at `LLM_TIMEOUT_SECONDS`. A provider that is unconfigured, errors, or hangs hands off to the next; if all of them fail, the stage falls back to keyword heuristics and the response says so in `warnings` rather than failing the request.
 
 PDF uploads return extracted text to the frontend, which includes it in the guidance request. This avoids relying on a file persisting across separate Lambda invocations.
 
@@ -128,7 +153,7 @@ These stages use **Python `asyncio`, specialized prompts, Pydantic models, and d
 - **Concurrent work:** Independent research and coaching tasks overlap; blocking model, HTTP, and PDF work is offloaded to worker threads.
 - **Multiple model providers:** Adapters support AWS Bedrock, OpenAI, and Gemini. The preferred provider is tried first, followed by other configured providers. If all attempts fail, stages can use heuristic fallbacks.
 - **Explicit demo mode:** `LLM_PROVIDER=offline` disables model calls for a credential-free local demonstration. Generic fallback output is not evidence of a successful model call.
-- **Separate hosting responsibilities:** Amplify publishes the React build; Lambda executes Python on demand; ECR stores the backend image.
+- **Separate hosting responsibilities:** Vercel publishes the React build; Lambda executes Python on demand; ECR stores the backend image. The two deploy on independent triggers.
 - **Browser integration:** `REACT_APP_API_URL` supplies the backend address at build time, and backend CORS settings allow the deployed frontend origin.
 
 ## Built with
@@ -139,8 +164,8 @@ These stages use **Python `asyncio`, specialized prompts, Pydantic models, and d
 | API | Python 3.11+, FastAPI, Pydantic, Mangum |
 | Workflow | `asyncio`, specialized research and coaching modules |
 | Model integrations | AWS Bedrock, OpenAI, Google Gemini |
-| Hosting | AWS Amplify Hosting, AWS Lambda, Amazon ECR, Docker |
-| Frontend delivery | GitHub integration, `amplify.yml`, npm |
+| Hosting | Vercel (frontend), AWS Lambda, Amazon ECR, Docker |
+| Frontend delivery | GitHub integration, `vercel.json`, npm |
 | Verification | Jest and React Testing Library; manual deployment smoke checks |
 
 ## Run locally
@@ -203,17 +228,17 @@ LLM_PROVIDER=offline clubapply-strands \
 
 The CLI writes a structured report under `out/`. Supply your own PDF. Add `--online` to enable source fetching; omitting it does not itself disable model calls.
 
-## AWS deployment
+## Deployment
 
-**Live frontend:** [ClubApply on Amplify](https://main.d8qdpc5eyzotl.amplifyapp.com/)
+**Live app:** [clubapply.vercel.app](https://clubapply.vercel.app)
 
 | Component | Deployment behavior |
 | --- | --- |
-| Frontend | GitHub `main` → Amplify → `npm ci` → `npm run build` → publish `client/build` |
+| Frontend | GitHub `main` → Vercel → `npm ci` → `npm run build` → publish `client/build` |
 | Backend | Docker build → ECR push → Lambda image update |
 | API access | Public Function URL, with both URL-invocation permissions and application CORS |
 
-See [Amplify setup and deployment notes](docs/AMPLIFY.md) and the [backend deployment guide](docs/DEPLOYMENT.md). The latter retains the earlier S3 frontend alternative; Amplify is the active frontend host.
+See the [backend deployment guide](docs/DEPLOYMENT.md) and [Amplify notes](docs/AMPLIFY.md). Vercel is the active frontend host; an AWS Amplify app remains connected to the same repository as a working fallback, and the docs retain an earlier S3 alternative.
 
 Hosting and model use are subject to provider pricing and account allowances; this project does not promise a zero-cost deployment.
 
@@ -232,7 +257,8 @@ AWS-x-Bruin-AI/
 ├── orchestrator.py         Full six-stage pipeline for CLI and API
 ├── main.py                 CLI entry point
 ├── Dockerfile              Lambda backend image
-├── amplify.yml             Frontend build configuration
+├── vercel.json             Frontend build configuration (Vercel)
+├── amplify.yml             Frontend build configuration (Amplify fallback)
 ├── scripts/                Deployment helpers
 └── docs/                   Architecture walkthroughs and deployment notes
 ```
@@ -246,7 +272,7 @@ CI=true npm --prefix client test -- --watchAll=false --runInBand
 npm --prefix client run build
 ```
 
-The UI tests cover manual experience submission, PDF upload handling, and the interview/question-import path with mocked API calls. Live smoke checks have verified frontend delivery, Lambda health, CORS, and a manual-input guidance request; these are not a comprehensive backend integration suite.
+The UI tests cover manual experience submission, PDF upload handling, and the interview/question-import path with mocked API calls. Live smoke checks have verified frontend delivery, Lambda health, CORS from the deployed origin, and a full manual-input guidance request against production; these are not a comprehensive backend integration suite.
 
 ClubApply is a **hackathon prototype**. Public-source access can fail, Instagram coverage is limited by what is publicly accessible, and model failures may produce generic templates. Authentication, rate limiting, stronger URL-fetch protections, and production data-handling controls remain future work. CORS is a browser policy, not authentication. Use demo information when exploring the public app.
 
