@@ -2,7 +2,7 @@
 
 ## Suggested resume entry
 
-**ClubApply | AWS × Bruin AI Hackathon, UCLA**  
+**ClubApply | AWS × Bruin AI Hackathon, UCLA — Best Use of AWS Technologies**  
 Python, FastAPI, React, AWS Bedrock, Pydantic
 
 - Built a full-stack club application assistant using React and FastAPI, combining public club research and PDF resume analysis to generate application strategies, resume feedback, and interview preparation.
@@ -20,13 +20,14 @@ Choose three bullets total for a typical resume. For backend roles, replace the 
 ## Claims to leave out until verified
 
 - Percentage latency improvements, user counts, acceptance-rate gains, accuracy gains, or cost reductions: no supporting measurements are present.
-- “Deployed on AWS”: the repository demonstrates an inference adapter, not deployment infrastructure.
 - “Built with Strands Swarm”: the executable implementation uses direct model SDKs and asyncio.
 - RAG, semantic search, or vector database integration: not implemented.
 - Voice interviews and Word resume parsing: not implemented. Manual profile text now reaches coaching prompts, but live personalization is not yet validated.
 - Automated resume rewriting/export: the output is suggested edits, not an edited resume document.
 
-Hackathon participation and October 2025 come from the original README. Confirm the event date, team size, personal ownership, and any award or judging outcome before adding those details.
+The **Best Use of AWS Technologies** award at the AWS × Bruin AI Hackathon (UCLA, October 2025) is confirmed and safe to state. Still confirm team size and personal ownership before using “built” or “designed” unqualified.
+
+The backend is now genuinely deployed on AWS — a container image on Lambda behind a Function URL — so “deployed on AWS” is accurate and defensible, unlike when these notes were first written.
 
 ## A 45-second project explanation
 

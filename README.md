@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img alt="Built for AWS × Bruin AI" src="https://img.shields.io/badge/BUILT_FOR-AWS_%C3%97_BRUIN_AI-e0b45c?style=for-the-badge" />
+  <img alt="Winner: Best Use of AWS Technologies, AWS × Bruin AI Hackathon" src="https://img.shields.io/badge/WINNER-BEST_USE_OF_AWS_TECHNOLOGIES-e0b45c?style=for-the-badge" />
   <img alt="Frontend: React on Vercel" src="https://img.shields.io/badge/FRONTEND-REACT_ON_VERCEL-61dafb?style=for-the-badge" />
   <img alt="Backend: FastAPI on AWS Lambda" src="https://img.shields.io/badge/BACKEND-FASTAPI_ON_LAMBDA-009688?style=for-the-badge" />
 </p>
@@ -27,7 +27,7 @@ Applying to a university club can mean piecing together a website, an Instagram 
 
 **ClubApply brings that preparation into one workflow.** Students provide the club they are interested in, their experience, and the questions they need to answer. The application researches available club sources and produces a club overview, application guidance, resume suggestions, and optional interview preparation.
 
-Originally built for the **AWS × Bruin AI Hackathon at UCLA in October 2025**, the project now runs a React frontend on Vercel and a container-based FastAPI backend on AWS Lambda.
+Built for the **AWS × Bruin AI Hackathon at UCLA in October 2025**, where it won **Best Use of AWS Technologies**. The project now runs a React frontend on Vercel and a container-based FastAPI backend on AWS Lambda.
 
 ## From interest to application
 
