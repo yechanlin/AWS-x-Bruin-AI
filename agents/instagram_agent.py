@@ -1,4 +1,9 @@
+"""Fetches a club's public Instagram HTML and asks the LLM to extract InstagramFindings, falling back to keyword heuristics when no model is available."""
+
 from __future__ import annotations
+
+import logging
+import asyncio
 
 from typing import Optional
 
@@ -7,22 +12,27 @@ from ..tools.fetch_url import fetch_html, extract_visible_text
 from .llm_utils import call_openai_json
 
 
+logger = logging.getLogger(__name__)
+
 SYSTEM_PROMPT = (
     "You extract public, high-signal info from a club’s Instagram HTML.\n"
     "Return JSON: {mission_signals[], recurring_events[], recent_highlights[], tone, "
-    "notable_people[], keywords[], warnings[]}"
+    "notable_people[], keywords[], warnings[]}. "
+    "Only report facts actually present in the provided text; do not invent event "
+    "names, dates, or people. Return an empty array (or empty string) rather than "
+    "guessing - never null."
 )
 
 
 async def run(instagram_url: Optional[str], is_online: bool = True) -> InstagramFindings:
-    print(f"[InstagramAgent] start url={instagram_url} online={is_online}")
+    logger.info(f"[InstagramAgent] start url={instagram_url} online={is_online}")
     if not instagram_url:
         return InstagramFindings(warnings=["No Instagram URL provided."])
 
     html = ""
     if is_online:
-        print("[InstagramAgent] fetching HTML...")
-        html = fetch_html(instagram_url)
+        logger.info("[InstagramAgent] fetching HTML...")
+        html = await asyncio.to_thread(fetch_html, instagram_url)
     text = extract_visible_text(html) if html else ""
 
     user_prompt = (
@@ -31,16 +41,16 @@ async def run(instagram_url: Optional[str], is_online: bool = True) -> Instagram
         "Focus on mission signals, recruiting hints, and events."
     )
 
-    print("[InstagramAgent] calling LLM for JSON parse...")
-    data = call_openai_json(SYSTEM_PROMPT, user_prompt)
+    logger.info("[InstagramAgent] calling LLM for JSON parse...")
+    data = await asyncio.to_thread(call_openai_json, SYSTEM_PROMPT, user_prompt)
     if data:
         try:
             return InstagramFindings(**data)
-        except Exception:
-            print("[InstagramAgent] LLM JSON parse failed, using fallback")
+        except Exception as e:
+            logger.warning(f"[InstagramAgent] LLM JSON parse failed ({e}), using fallback")
 
     # Heuristic fallback
-    print("[InstagramAgent] using heuristic fallback")
+    logger.info("[InstagramAgent] using heuristic fallback")
     mission_signals = []
     keywords = []
     warnings = []

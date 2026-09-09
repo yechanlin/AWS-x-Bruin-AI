@@ -1,0 +1,26 @@
+# Packaging config: installs this repo root as the "clubapply_strands" package
+# (flat layout - package-dir maps clubapply_strands to ".") and registers the
+# `clubapply-strands` CLI script (main.py:main). Dependencies come from requirements.txt.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clubapply-strands"
+version = "0.1.0"
+description = "Club research and application coaching assistant"
+requires-python = ">=3.11"
+dynamic = ["dependencies"]
+
+[project.scripts]
+clubapply-strands = "clubapply_strands.main:main"
+
+[tool.setuptools]
+packages = ["clubapply_strands", "clubapply_strands.agents", "clubapply_strands.tools", "clubapply_strands.server"]
+
+[tool.setuptools.package-dir]
+clubapply_strands = "."
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}

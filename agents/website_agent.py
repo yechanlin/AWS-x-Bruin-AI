@@ -1,4 +1,9 @@
+"""Crawls a club's website (same-domain, up to 5 pages) and asks the LLM to extract WebsiteFindings, falling back to keyword heuristics when no model is available."""
+
 from __future__ import annotations
+
+import asyncio
+import logging
 
 from typing import Optional, List
 
@@ -6,23 +11,29 @@ from ..schemas import WebsiteFindings
 from ..tools.fetch_url import crawl_website
 from .llm_utils import call_openai_json
 
+logger = logging.getLogger(__name__)
+
 
 SYSTEM_PROMPT = (
     "You read a club website. Return JSON: {about, mission_values[], how_to_join, "
-    "events[], criteria[], links[], keywords[], warnings[]}"
+    "events[], criteria[], links[], keywords[], warnings[]}. "
+    "Only report facts actually present in the provided text - dates, legal status, "
+    "GPA/experience requirements, meeting times, and similar specifics must not be "
+    "invented. If a field isn't clearly supported by the text, return an empty "
+    "array (or empty string) for it rather than guessing - never null."
 )
 
 
 async def run(website_url: Optional[str], is_online: bool = True) -> WebsiteFindings:
-    print(f"[WebsiteAgent] start url={website_url} online={is_online}")
+    logger.info(f"[WebsiteAgent] start url={website_url} online={is_online}")
     if not website_url:
         return WebsiteFindings(warnings=["No website URL provided."])
 
     combined_text = ""
     links: List[str] = []
     if is_online:
-        print("[WebsiteAgent] crawling website up to 5 pages...")
-        combined_text, links = crawl_website(website_url, max_pages=5)
+        logger.info("[WebsiteAgent] crawling website up to 5 pages...")
+        combined_text, links = await asyncio.to_thread(crawl_website, website_url, max_pages=5)
 
     user_prompt = (
         f"URL: {website_url}\n\n"
@@ -31,18 +42,18 @@ async def run(website_url: Optional[str], is_online: bool = True) -> WebsiteFind
         "Find About/Mission, joining info, events, criteria, links, and keywords."
     )
 
-    print("[WebsiteAgent] calling LLM for JSON parse...")
-    data = call_openai_json(SYSTEM_PROMPT, user_prompt)
+    logger.info("[WebsiteAgent] calling LLM for JSON parse...")
+    data = await asyncio.to_thread(call_openai_json, SYSTEM_PROMPT, user_prompt)
     if data:
         try:
             if "links" not in data:
                 data["links"] = links
             return WebsiteFindings(**data)
-        except Exception:
-            print("[WebsiteAgent] LLM JSON parse failed, using fallback")
+        except Exception as e:
+            logger.warning(f"[WebsiteAgent] LLM JSON parse failed ({e}), using fallback")
 
     # Heuristic fallback parsing
-    print("[WebsiteAgent] using heuristic fallback")
+    logger.info("[WebsiteAgent] using heuristic fallback")
     about = None
     mission_values: List[str] = []
     how_to_join = None

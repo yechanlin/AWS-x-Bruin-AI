@@ -1,0 +1,21 @@
+# Only the Python package source + requirements.txt belong in the Lambda
+# image (see Dockerfile) - everything else is explicitly excluded, secrets
+# above all.
+.git
+.gitignore
+.claude
+.venv
+__pycache__
+*.py[cod]
+*.egg-info
+.env
+.env.*
+!.env.example
+logs
+out
+client
+docs
+tests
+README.md
+Dockerfile
+.dockerignore

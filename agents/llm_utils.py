@@ -1,10 +1,20 @@
+"""Selects the configured LLM provider (OpenAI, Gemini, or AWS Bedrock; explicit LLM_PROVIDER or auto-detected by API key) and returns parsed JSON, with a JSON-repair fallback and no-provider handling."""
+
 from __future__ import annotations
 
+import logging
 import json
 import os
 import re
-from typing import Optional, Any, Dict
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from typing import Any, Callable, Dict, List, Optional
 
+
+logger = logging.getLogger(__name__)
+
+# How long a single provider call may run before we give up on it and try the
+# next configured provider. Override with LLM_TIMEOUT_SECONDS.
+LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))
 
 def _clean_json(text: str) -> str:
     if text is None:
@@ -31,6 +41,29 @@ def try_parse_json(text: str) -> Optional[Dict[str, Any]]:
             return None
 
 
+def _run_with_timeout(fn: Callable[..., Any], args: tuple, timeout: float) -> Optional[Dict[str, Any]]:
+    """Run fn(*args) on a worker thread and give up after `timeout` seconds.
+
+    Python can't force-kill a thread, so a timed-out call keeps running in
+    the background and its result is discarded - that's fine here since
+    fn's own return value is all the caller ever wanted. shutdown(wait=False)
+    is deliberate: the default `wait=True` would block here until the slow
+    call finishes, defeating the point of the timeout.
+    """
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(fn, *args)
+    try:
+        return future.result(timeout=timeout)
+    except FutureTimeoutError:
+        logger.warning(f"[LLM] {fn.__name__} timed out after {timeout}s")
+        return None
+    except Exception as e:
+        logger.warning(f"[LLM] {fn.__name__} raised unexpectedly: {e}")
+        return None
+    finally:
+        executor.shutdown(wait=False)
+
+
 def _call_openai_json(system_prompt: str, user_prompt: str, model: Optional[str] = None) -> Optional[Dict[str, Any]]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -40,8 +73,8 @@ def _call_openai_json(system_prompt: str, user_prompt: str, model: Optional[str]
     except Exception:
         return None
     mdl = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    print(f"[LLM] OpenAI call model={mdl} sys_chars={len(system_prompt)} user_chars={len(user_prompt)}")
-    client = OpenAI(api_key=api_key)
+    logger.info(f"[LLM] OpenAI call model={mdl} sys_chars={len(system_prompt)} user_chars={len(user_prompt)}")
+    client = OpenAI(api_key=api_key, timeout=LLM_TIMEOUT_SECONDS)
     try:
         completion = client.chat.completions.create(
             model=mdl,
@@ -50,72 +83,118 @@ def _call_openai_json(system_prompt: str, user_prompt: str, model: Optional[str]
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.2,
+            # Structurally forces valid JSON syntax (every agent prompt already
+            # says "JSON", which this mode requires). Doesn't guarantee the
+            # right *shape* - callers still validate against a Pydantic model -
+            # but it rules out plain-prose responses entirely.
+            response_format={"type": "json_object"},
         )
         content = completion.choices[0].message.content
         if not content:
             return None
-        print(f"[LLM] OpenAI response chars={len(content)}")
+        logger.info(f"[LLM] OpenAI response chars={len(content)}")
         return try_parse_json(content)
-    except Exception:
-        print("[LLM] OpenAI call failed", flush=True)
+    except Exception as e:
+        logger.warning(f"[LLM] OpenAI call failed: {e}")
         return None
 
 
 def _call_gemini_json(system_prompt: str, user_prompt: str, model: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Call Gemini via the `google-genai` SDK (the maintained replacement for
+    the retired `google-generativeai` package - see README for the migration
+    note)."""
     key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not key:
         return None
     try:
-        import google.generativeai as genai
+        from google import genai
+        from google.genai import types
     except Exception:
         return None
+    mdl = model or os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    logger.info(f"[LLM] Gemini call model={mdl} sys_chars={len(system_prompt)} user_chars={len(user_prompt)}")
     try:
-        genai.configure(api_key=key)
-        mdl = model or os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-        print(f"[LLM] Gemini call model={mdl} sys_chars={len(system_prompt)} user_chars={len(user_prompt)}")
-        prompt = (
-            "System:\n" + system_prompt + "\n\n" +
-            "User:\n" + user_prompt + "\n\n" +
-            "Return ONLY valid JSON."
+        client = genai.Client(api_key=key)
+        config = types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            temperature=0.2,
+            response_mime_type="application/json",
+            http_options=types.HttpOptions(timeout=int(LLM_TIMEOUT_SECONDS * 1000)),
         )
-        m = genai.GenerativeModel(mdl)
-        resp = m.generate_content(prompt)
-        text = getattr(resp, "text", None)
-        if text:
-            print(f"[LLM] Gemini response chars={len(text)}")
-            return try_parse_json(text)
-        try:
-            cand = resp.candidates[0]
-            parts = getattr(cand, "content", None).parts if hasattr(cand, "content") else []
-            combined = "\n".join(getattr(p, "text", "") for p in parts)
-            print(f"[LLM] Gemini response (combined parts) chars={len(combined)}")
-            return try_parse_json(combined)
-        except Exception:
+        response = client.models.generate_content(model=mdl, contents=user_prompt, config=config)
+        text = response.text
+        if not text:
             return None
-    except Exception:
-        print("[LLM] Gemini call failed", flush=True)
+        logger.info(f"[LLM] Gemini response chars={len(text)}")
+        return try_parse_json(text)
+    except Exception as e:
+        logger.warning(f"[LLM] Gemini call failed: {e}")
         return None
+
+
+def _normalize_provider_name(name: str) -> Optional[str]:
+    name = (name or "").lower().strip()
+    if name in {"gemini", "google"}:
+        return "gemini"
+    if name == "openai":
+        return "openai"
+    if name in {"bedrock", "aws"}:
+        return "bedrock"
+    return None
+
+
+def _has_credentials(provider: str) -> bool:
+    if provider == "openai":
+        return bool(os.getenv("OPENAI_API_KEY"))
+    if provider == "gemini":
+        return bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    if provider == "bedrock":
+        return bool(os.getenv("AWS_ACCESS_KEY_ID") or os.getenv("AWS_PROFILE"))
+    return False
 
 
 def call_llm_json(system_prompt: str, user_prompt: str, model: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    provider = (os.getenv("LLM_PROVIDER") or "").lower().strip()
-    if provider in {"gemini", "google"}:
-        print("[LLM] Provider forced: gemini")
-        return _call_gemini_json(system_prompt, user_prompt, model=model)
-    if provider in {"bedrock", "aws"}:
-        print("[LLM] Provider forced: bedrock")
-        return _call_bedrock_json(system_prompt, user_prompt, model=model)
-    if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
-        print("[LLM] Provider auto: gemini (key present)")
-        return _call_gemini_json(system_prompt, user_prompt, model=model)
-    if os.getenv("OPENAI_API_KEY"):
-        print("[LLM] Provider auto: openai (key present)")
-        return _call_openai_json(system_prompt, user_prompt, model=model)
-    # Try AWS Bedrock via default credential chain
-    if os.getenv("AWS_ACCESS_KEY_ID") or os.getenv("AWS_PROFILE"):
-        print("[LLM] Provider auto: bedrock (aws creds present)")
-        return _call_bedrock_json(system_prompt, user_prompt, model=model)
-    print("[LLM] No provider available; returning None")
+    """Try each configured provider in turn, falling back to the next one if
+    a call fails, errors, or exceeds LLM_TIMEOUT_SECONDS (default 20s).
+
+    LLM_PROVIDER, if set, is tried first but is no longer a hard lock - it
+    just picks the starting point; any other provider with credentials
+    present is tried next, in the fixed order gemini -> openai -> bedrock.
+    LLM_PROVIDER=offline (or "none") still disables model calls entirely,
+    regardless of which keys are configured.
+    """
+    raw_provider = (os.getenv("LLM_PROVIDER") or "").lower().strip()
+    if raw_provider in {"none", "offline"}:
+        return None
+
+    order: List[str] = []
+    preferred = _normalize_provider_name(raw_provider)
+    if preferred:
+        order.append(preferred)
+    for name in ("gemini", "openai", "bedrock"):
+        if name not in order and _has_credentials(name):
+            order.append(name)
+
+    if not order:
+        logger.warning("[LLM] No provider available; returning None")
+        return None
+
+    funcs: Dict[str, Callable[..., Optional[Dict[str, Any]]]] = {
+        "openai": _call_openai_json,
+        "gemini": _call_gemini_json,
+        "bedrock": _call_bedrock_json,
+    }
+
+    for idx, name in enumerate(order, start=1):
+        logger.info(f"[LLM] Trying provider {idx}/{len(order)}: {name}")
+        result = _run_with_timeout(funcs[name], (system_prompt, user_prompt, model), LLM_TIMEOUT_SECONDS)
+        if result is not None:
+            if idx > 1:
+                logger.info(f"[LLM] Recovered via {name} after {idx - 1} earlier provider(s) failed")
+            return result
+        logger.warning(f"[LLM] Provider {name} failed, timed out, or returned nothing")
+
+    logger.warning(f"[LLM] All {len(order)} configured provider(s) failed; using heuristic fallback")
     return None
 
 
@@ -132,9 +211,10 @@ def _call_bedrock_json(system_prompt: str, user_prompt: str, model: Optional[str
     """
     try:
         import boto3
+        from botocore.config import Config
         from botocore.exceptions import ClientError
     except Exception:
-        print("[LLM] boto3 not installed for Bedrock")
+        logger.warning("[LLM] boto3 not installed for Bedrock")
         return None
 
     region = (
@@ -161,11 +241,14 @@ def _call_bedrock_json(system_prompt: str, user_prompt: str, model: Optional[str
 
     anthropic_version = os.getenv("ANTHROPIC_VERSION", "bedrock-2023-05-31")
 
-    client = boto3.client("bedrock-runtime", region_name=region)
+    # Per-attempt timeout, kept below LLM_TIMEOUT_SECONDS so a stuck candidate
+    # doesn't consume the whole cross-provider fallback budget by itself.
+    boto_config = Config(connect_timeout=5, read_timeout=min(10, LLM_TIMEOUT_SECONDS))
+    client = boto3.client("bedrock-runtime", region_name=region, config=boto_config)
 
     last_err = None
     for idx, model_id in enumerate(candidates, start=1):
-        print(f"[LLM] Bedrock attempt {idx}/{len(candidates)} model={model_id} region={region} sys_chars={len(system_prompt)} user_chars={len(user_prompt)}")
+        logger.info(f"[LLM] Bedrock attempt {idx}/{len(candidates)} model={model_id} region={region} sys_chars={len(system_prompt)} user_chars={len(user_prompt)}")
         try:
             body = {
                 "anthropic_version": anthropic_version,
@@ -198,26 +281,26 @@ def _call_bedrock_json(system_prompt: str, user_prompt: str, model: Optional[str
                         parts.append(t)
                 text_content = "\n".join(parts)
             if not text_content:
-                print("[LLM] Bedrock empty response content; trying next model")
+                logger.warning("[LLM] Bedrock empty response content; trying next model")
                 last_err = "empty_response"
                 continue
-            print(f"[LLM] Bedrock response chars={len(text_content)}")
+            logger.info(f"[LLM] Bedrock response chars={len(text_content)}")
             parsed = try_parse_json(text_content)
             if parsed is not None:
                 return parsed
-            print("[LLM] Bedrock JSON parse failed; trying next model")
+            logger.warning("[LLM] Bedrock JSON parse failed; trying next model")
             last_err = "json_parse_failed"
         except ClientError as e:
             code = e.response.get("Error", {}).get("Code")
             msg = e.response.get("Error", {}).get("Message")
-            print(f"[LLM] Bedrock ClientError code={code} msg={msg}; trying next model")
+            logger.warning(f"[LLM] Bedrock ClientError code={code} msg={msg}; trying next model")
             last_err = code or str(e)
             # On throttling or other errors, just try next candidate
             continue
         except Exception as e:
-            print(f"[LLM] Bedrock call failed: {e}; trying next model")
+            logger.warning(f"[LLM] Bedrock call failed: {e}; trying next model")
             last_err = str(e)
             continue
 
-    print(f"[LLM] Bedrock exhausted candidates; last_err={last_err}")
+    logger.warning(f"[LLM] Bedrock exhausted candidates; last_err={last_err}")
     return None

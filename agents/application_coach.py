@@ -1,4 +1,9 @@
+"""Generates per-question application strategies (structure, do/don'ts, example answer) from a ClubBrief."""
+
 from __future__ import annotations
+
+import logging
+import asyncio
 
 import json
 from typing import List, Optional
@@ -7,27 +12,33 @@ from ..schemas import ClubBrief, ApplicationSuggestions, model_to_dict
 from .llm_utils import call_openai_json
 
 
+logger = logging.getLogger(__name__)
+
 SYSTEM_PROMPT = (
-    "You craft strategies for application forms. Return JSON: {club_rundown, "
-    "values_alignment[{value, how_to_show_it}], question_strategies[{question, structure, do_donts[], example_answer≤150 words}]}"
+    "You craft strategies for application forms. Return ONLY valid JSON matching exactly: "
+    '{"club_rundown": "a 1-3 sentence plain-text summary of the club, as a single string - not an object", '
+    '"values_alignment": [{"value": string, "how_to_show_it": string}], '
+    '"question_strategies": [{"question": string, "structure": string, "do_donts": string[], '
+    '"example_answer": "string, \\u2264150 words"}]}'
 )
 
 
-async def run(brief: ClubBrief, questions: Optional[List[str]]) -> ApplicationSuggestions:
-    print(f"[ApplicationCoachAgent] start questions_count={(len(questions) if questions else 0)}")
+async def run(brief: ClubBrief, questions: Optional[List[str]], resume_text: str = "") -> ApplicationSuggestions:
+    logger.info(f"[ApplicationCoachAgent] start questions_count={(len(questions) if questions else 0)}")
     user_prompt = (
         "ClubBrief:\n" + json.dumps(model_to_dict(brief), indent=2) + "\n\n"
         + "Application questions (if any):\n" + ("\n".join(questions or []) or "(none provided)") + "\n\n"
-        + "Keep examples concise (≤150 words)."
+        + "Applicant experience:\n" + resume_text[:8000] + "\n\n"
+        + "Keep examples concise (≤150 words). Use only supplied applicant facts; use placeholders for missing facts and never invent metrics."
     )
 
-    print("[ApplicationCoachAgent] calling LLM for strategies...")
-    data = call_openai_json(SYSTEM_PROMPT, user_prompt)
+    logger.info("[ApplicationCoachAgent] calling LLM for strategies...")
+    data = await asyncio.to_thread(call_openai_json, SYSTEM_PROMPT, user_prompt)
     if data:
         try:
             return ApplicationSuggestions(**data)
-        except Exception:
-            print("[ApplicationCoachAgent] LLM JSON parse failed, using fallback")
+        except Exception as e:
+            logger.warning(f"[ApplicationCoachAgent] LLM JSON parse failed ({e}), using fallback")
 
     # Fallback
     values_alignment = [
@@ -49,7 +60,7 @@ async def run(brief: ClubBrief, questions: Optional[List[str]]) -> ApplicationSu
             }
         )
 
-    print("[ApplicationCoachAgent] using heuristic fallback")
+    logger.info("[ApplicationCoachAgent] using heuristic fallback")
     return ApplicationSuggestions(
         club_rundown=brief.overview,
         values_alignment=values_alignment,

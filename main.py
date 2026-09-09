@@ -1,3 +1,5 @@
+"""CLI entry point: parses arguments, runs the full ClubApply pipeline via orchestrator.py, saves a JSON report to out/, and optionally opens an interactive InterviewChat."""
+
 from __future__ import annotations
 
 import argparse
@@ -8,9 +10,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
 
+from dotenv import load_dotenv
+
 from .schemas import InputSpec, model_to_dict
 from .orchestrator import run_clubapply
 from .agents.interview_coach import InterviewChat
+from .logging_config import setup_logging
+
+# Load provider API keys from .env at the repo root before anything reads them.
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 def parse_args() -> argparse.Namespace:
@@ -64,6 +72,7 @@ def parse_questions(q: Optional[str]) -> Optional[List[str]]:
 
 async def main_async():
     args = parse_args()
+    setup_logging("cli.log")
 
     print("Starting ClubApply Strands...")
     input_spec = InputSpec(
