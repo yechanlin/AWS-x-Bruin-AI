@@ -1,3 +1,4 @@
+// Unused agent-picker screen (not on App.js's active route) that would link out to the individual agent components below.
 import React from 'react';
 import { AGENT_TYPES, AGENT_NAMES } from '../utils/constants';
 

@@ -1,3 +1,4 @@
+// React entry point: mounts <App /> into #root and wires up CRA's reportWebVitals.
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 // Styles via Tailwind CDN (see public/index.html). Local PostCSS disabled for speed.

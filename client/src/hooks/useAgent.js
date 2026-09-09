@@ -1,3 +1,4 @@
+// Unused hook that dispatches to agentService by agent-type string and tracks loading/result/error state, for the Dashboard flow.
 import { useState } from 'react';
 import { agentService } from '../services/agentService';
 

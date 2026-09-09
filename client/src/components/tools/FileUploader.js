@@ -1,3 +1,4 @@
+// Unused generic drag-and-drop file input used by the Dashboard's agent components.
 import React from 'react';
 import { useFileUpload } from '../../hooks/useFileUpload';
 

@@ -1,3 +1,4 @@
+// The active application: the 3-step club-application wizard (club info -> profile -> questions) that calls POST /agents/application-coach and renders the results.
 import React, { useState } from 'react';
 // Local CSS disabled to avoid PostCSS build during demo.
 import ApiService from './services/api';
@@ -97,13 +98,13 @@ const ClubInfoPage = ({ clubInfo, handleClubInputChange, handleClubSubmit }) => 
 
 const ShortAnswersPage = ({ shortAnswers, handleQuestionsUpload, handleQuestionChange, addQuestion, handleFinalSubmit, setCurrentStep, loading, suggestions }) => (
   <div className="form-container">
-    <h1 className="glitch-text">Short Answer Questions</h1>
+    <h1 className="glitch-text">Application & Interview Preparation</h1>
     <p className="subtitle">Upload your application questions or enter them manually for personalized suggestions.</p>
     
     <div className="upload-section">
-      <h3>Upload Application Questions</h3>
+      <h3>Upload Questions (.txt, one question per line)</h3>
       <label className="upload-label">
-        <input type="file" accept=".pdf,.doc,.docx,.txt" onChange={handleQuestionsUpload} />
+        <input type="file" accept=".txt,text/plain" onChange={handleQuestionsUpload} />
         <div className="upload-box">
           <div className="upload-icon">📋</div>
           <p>{shortAnswers.questionsFile ? shortAnswers.questionsFile.name : 'Click to upload questions document'}</p>
@@ -115,8 +116,9 @@ const ShortAnswersPage = ({ shortAnswers, handleQuestionsUpload, handleQuestionC
       <h3>Or Enter Questions Manually</h3>
       {shortAnswers.questions.map((question, index) => (
         <div key={index} className="question-group">
-          <label>Question {index + 1}</label>
+          <label htmlFor={`question-${index}`}>Question {index + 1}</label>
           <textarea
+            id={`question-${index}`}
             value={question}
             onChange={(e) => {
               // auto-resize to fit content height
@@ -141,7 +143,7 @@ const ShortAnswersPage = ({ shortAnswers, handleQuestionsUpload, handleQuestionC
     </div>
 
     <button onClick={handleFinalSubmit} className="cyber-btn" disabled={loading}>
-      <span>{loading ? 'Generating…' : 'Help me get in'}</span>
+      <span>{loading ? 'Generating…' : 'Generate guidance'}</span>
       <div className="btn-glow"></div>
     </button>
 
@@ -151,46 +153,23 @@ const ShortAnswersPage = ({ shortAnswers, handleQuestionsUpload, handleQuestionC
 
     {suggestions && (
       <div className="results-panel" style={{marginTop: 24}}>
-        {/* Club overview and values */}
-        {suggestions.club && (
-          <div style={{marginBottom: 16}}>
-            <h3 style={{marginBottom: 6}}>About the club</h3>
-            <div style={{opacity: 0.9}}>{suggestions.club.overview}</div>
-            {Array.isArray(suggestions.club.mission_values) && suggestions.club.mission_values.length > 0 && (
-              <div style={{marginTop: 8}}>
-                <strong>Values:</strong> {suggestions.club.mission_values.join(', ')}
-              </div>
-            )}
-          </div>
-        )}
+        {suggestions.warnings?.length > 0 && <div role="status"><h3>About these results</h3><ul>{suggestions.warnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul></div>}
 
-        <h3 style={{marginBottom: 8}}>Suggested Strategies</h3>
-        {suggestions.application && Array.isArray(suggestions.application.values_alignment) && suggestions.application.values_alignment.length > 0 && (
-          <div style={{marginBottom: 12}}>
-            <h4>Values Alignment</h4>
-            <ul>
-              {suggestions.application.values_alignment.map((v, i) => (
-                <li key={i}>
-                  <strong>{v.value || 'Value'}:</strong> {v.how_to_show_it || ''}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {/* Answers (separate view) */}
+        {/* The direct answer to what you typed - shown first and always expanded. */}
         {Array.isArray(suggestions.answers) && suggestions.answers.length > 0 && (
-          <div>
-            <h4>Answers</h4>
-            <ul>
+          <div style={{marginBottom: 20}}>
+            <h3 style={{marginBottom: 8}}>Your Answers</h3>
+            <ul style={{listStyle: 'none', padding: 0, margin: 0}}>
               {suggestions.answers.map((qs, i) => (
-                <li key={i} style={{marginBottom: 10}}>
-                  <div><strong>Q:</strong> {qs.question}</div>
-                  <div><strong>Structure:</strong> {qs.structure}</div>
-                  {qs.do_donts && (
-                    <div><strong>Do/Don't:</strong> {qs.do_donts.join(' • ')}</div>
-                  )}
-                  {qs.example_answer && (
-                    <div><strong>Example:</strong> {qs.example_answer}</div>
+                <li key={i} style={{marginBottom: 16}}>
+                  <div style={{marginBottom: 6}}><strong>Q:</strong> {qs.question}</div>
+                  {qs.example_answer && <div>{qs.example_answer}</div>}
+                  {(qs.structure || qs.do_donts) && (
+                    <details className="result-details" style={{marginTop: 8, marginBottom: 0}}>
+                      <summary style={{fontSize: 14}}>Structure &amp; tips</summary>
+                      {qs.structure && <div style={{marginTop: 8}}><strong>Structure:</strong> {qs.structure}</div>}
+                      {qs.do_donts && <div style={{marginTop: 4}}><strong>Do/Don't:</strong> {qs.do_donts.join(' • ')}</div>}
+                    </details>
                   )}
                 </li>
               ))}
@@ -198,157 +177,80 @@ const ShortAnswersPage = ({ shortAnswers, handleQuestionsUpload, handleQuestionC
           </div>
         )}
 
-        {/* Resume edits */}
+        {/* Everything below is supporting material, collapsed by default so it
+            doesn't bury the direct answer above. */}
+        {suggestions.interview && (
+          <details className="result-details">
+            <summary>Interview &amp; Coffee Chat Preparation</summary>
+            <div style={{marginTop: 10}}>
+              <p>{suggestions.interview.similar_experiences_summary}</p>
+              <h4>Likely questions</h4>
+              <ul>{suggestions.interview.likely_questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
+              <h4>Stories to prepare</h4>
+              <ul>{suggestions.interview.stories_to_prepare.map((q, i) => <li key={i}>{q}</li>)}</ul>
+              <h4>Pitch template</h4>
+              <p>{suggestions.interview.quick_pitch_template}</p>
+              <h4>Questions to ask</h4>
+              <ul>{suggestions.interview.followup_questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
+            </div>
+          </details>
+        )}
+
+        {suggestions.club && (
+          <details className="result-details">
+            <summary>About the club</summary>
+            <div style={{marginTop: 10}}>
+              <div style={{opacity: 0.9}}>{suggestions.club.overview}</div>
+              {Array.isArray(suggestions.club.mission_values) && suggestions.club.mission_values.length > 0 && (
+                <div style={{marginTop: 8}}>
+                  <strong>Values:</strong> {suggestions.club.mission_values.join(', ')}
+                </div>
+              )}
+              {suggestions.application && Array.isArray(suggestions.application.values_alignment) && suggestions.application.values_alignment.length > 0 && (
+                <div style={{marginTop: 12}}>
+                  <h4>Values Alignment</h4>
+                  <ul>
+                    {suggestions.application.values_alignment.map((v, i) => (
+                      <li key={i}>
+                        <strong>{v.value || 'Value'}:</strong> {v.how_to_show_it || ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </details>
+        )}
+
         {suggestions.resume && (
-          <div style={{marginTop: 16}}>
-            <h3 style={{marginBottom: 6}}>Resume edits to get in</h3>
-            {Array.isArray(suggestions.resume.top5_fixes) && suggestions.resume.top5_fixes.length > 0 && (
-              <div style={{marginBottom: 8}}>
-                <strong>Top fixes:</strong>
-                <ul>
-                  {suggestions.resume.top5_fixes.map((t, i) => (<li key={i}>{t}</li>))}
-                </ul>
-              </div>
-            )}
-            {Array.isArray(suggestions.resume.tailored_bullets) && suggestions.resume.tailored_bullets.length > 0 && (
-              <div style={{marginBottom: 8}}>
-                <strong>Tailored bullets:</strong>
-                <ul>
-                  {suggestions.resume.tailored_bullets.map((t, i) => (<li key={i}>{t}</li>))}
-                </ul>
-              </div>
-            )}
-          </div>
+          <details className="result-details">
+            <summary>Resume edits to get in</summary>
+            <div style={{marginTop: 10}}>
+              {Array.isArray(suggestions.resume.top5_fixes) && suggestions.resume.top5_fixes.length > 0 && (
+                <div style={{marginBottom: 8}}>
+                  <strong>Top fixes:</strong>
+                  <ul>
+                    {suggestions.resume.top5_fixes.map((t, i) => (<li key={i}>{t}</li>))}
+                  </ul>
+                </div>
+              )}
+              {Array.isArray(suggestions.resume.tailored_bullets) && suggestions.resume.tailored_bullets.length > 0 && (
+                <div style={{marginBottom: 8}}>
+                  <strong>Tailored bullets:</strong>
+                  <ul>
+                    {suggestions.resume.tailored_bullets.map((t, i) => (<li key={i}>{t}</li>))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </details>
         )}
       </div>
     )}
   </div>
 );
 
-function App() {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [clubInfo, setClubInfo] = useState({
-    clubName: '',
-    schoolName: '',
-    position: '',
-    clubWebsite: '',
-    clubInstagram: '',
-    applicationStage: ''
-  });
-  const [personalInfo, setPersonalInfo] = useState({
-    hasResume: null,
-    resumeFile: null,
-    name: '',
-    email: '',
-    phone: '',
-    education: '',
-    experiences: '',
-    projects: '',
-    skills: '',
-    achievements: ''
-  });
-  const [shortAnswers, setShortAnswers] = useState({
-    questionsFile: null,
-    questions: ['']
-  });
-  const [loading, setLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState(null);
-
-  const handleClubInputChange = (e) => {
-    const { name, value } = e.target;
-    setClubInfo(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handlePersonalInputChange = (e) => {
-    const { name, value } = e.target;
-    setPersonalInfo(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    setPersonalInfo(prev => ({
-      ...prev,
-      resumeFile: file
-    }));
-  };
-
-  const handleClubSubmit = (e) => {
-    e.preventDefault();
-    setCurrentStep(2);
-  };
-
-  const handlePersonalSubmit = (e) => {
-    e.preventDefault();
-    if (clubInfo.applicationStage === 'online-application') {
-      setCurrentStep(3);
-    } else {
-      console.log('All Info:', { clubInfo, personalInfo });
-    }
-  };
-
-  const handleQuestionsUpload = (e) => {
-    const file = e.target.files[0];
-    setShortAnswers(prev => ({
-      ...prev,
-      questionsFile: file
-    }));
-  };
-
-  const handleQuestionChange = (index, value) => {
-    const newQuestions = [...shortAnswers.questions];
-    newQuestions[index] = value;
-    setShortAnswers(prev => ({
-      ...prev,
-      questions: newQuestions
-    }));
-  };
-
-  const addQuestion = () => {
-    setShortAnswers(prev => ({
-      ...prev,
-      questions: [...prev.questions, '']
-    }));
-  };
-
-  const handleFinalSubmit = async () => {
-    try {
-      setLoading(true);
-      setSuggestions(null);
-      const qs = (shortAnswers.questions || []).map(q => (q || '').trim()).filter(Boolean);
-      const jobDesc = `${clubInfo.position} position at ${clubInfo.clubName}, ${clubInfo.schoolName}${clubInfo.clubWebsite ? ' - ' + clubInfo.clubWebsite : ''}`;
-      const body = {
-        job_description: jobDesc,
-        questions: qs,
-        website_url: clubInfo.clubWebsite || undefined,
-        instagram_url: clubInfo.clubInstagram || undefined,
-        club_name: clubInfo.clubName,
-        school_name: clubInfo.schoolName,
-      };
-      if (personalInfo.resumeFile) {
-        const up = await ApiService.uploadFile('/upload/resume', personalInfo.resumeFile);
-        if (up && up.resume_path) {
-          body.resume_path = up.resume_path;
-        }
-      }
-      const resp = await ApiService.post('/agents/application-coach', body);
-      setSuggestions(resp);
-    } catch (e) {
-      console.error('Failed to generate suggestions', e);
-      alert('Failed to generate suggestions. Ensure the backend is running on http://localhost:8000');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-
-  const PersonalInfoPage = () => (
+const PersonalInfoPage = ({ personalInfo, setPersonalInfo, handleFileUpload, handlePersonalSubmit, handlePersonalInputChange, clubInfo, setCurrentStep }) => (
     <div className="form-container">
       <h1 className="glitch-text">Personal Information</h1>
       <p className="subtitle">Tell us about yourself to create the perfect application.</p>
@@ -376,7 +278,7 @@ function App() {
       {personalInfo.hasResume === true && (
         <div className="upload-section">
           <label className="upload-label">
-            <input type="file" accept=".pdf,.doc,.docx" onChange={handleFileUpload} />
+            <input type="file" accept=".pdf,application/pdf" onChange={handleFileUpload} />
             <div className="upload-box">
               <div className="upload-icon">📄</div>
               <p>{personalInfo.resumeFile ? personalInfo.resumeFile.name : 'Click to upload your resume'}</p>
@@ -476,7 +378,7 @@ function App() {
           </div>
 
           <button type="submit" className="cyber-btn">
-            <span>{clubInfo.applicationStage === 'online-application' ? 'Continue to Questions' : 'Practice with Voice Agent'}</span>
+            <span>{clubInfo.applicationStage === 'online-application' ? 'Continue to Questions' : 'Continue to Preparation'}</span>
             <div className="btn-glow"></div>
           </button>
         </form>
@@ -484,7 +386,7 @@ function App() {
 
       {personalInfo.hasResume === true && personalInfo.resumeFile && (
         <button onClick={handlePersonalSubmit} className="cyber-btn">
-          <span>{clubInfo.applicationStage === 'online-application' ? 'Continue to Questions' : 'Practice with Voice Agent'}</span>
+          <span>{clubInfo.applicationStage === 'online-application' ? 'Continue to Questions' : 'Continue to Preparation'}</span>
           <div className="btn-glow"></div>
         </button>
       )}
@@ -495,6 +397,160 @@ function App() {
     </div>
   );
 
+
+function App() {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [clubInfo, setClubInfo] = useState({
+    clubName: '',
+    schoolName: '',
+    position: '',
+    clubWebsite: '',
+    clubInstagram: '',
+    applicationStage: ''
+  });
+  const [personalInfo, setPersonalInfo] = useState({
+    hasResume: null,
+    resumeFile: null,
+    name: '',
+    email: '',
+    phone: '',
+    education: '',
+    experiences: '',
+    projects: '',
+    skills: '',
+    achievements: ''
+  });
+  const [shortAnswers, setShortAnswers] = useState({
+    questionsFile: null,
+    questions: ['']
+  });
+  const [loading, setLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState(null);
+  const [error, setError] = useState('');
+  const [runtime, setRuntime] = useState(null);
+
+  React.useEffect(() => {
+    setSuggestions(null);
+  }, [clubInfo, personalInfo, shortAnswers]);
+
+  React.useEffect(() => {
+    ApiService.request('/health').then(setRuntime).catch(() => setError('Cannot reach the backend. Start the API on port 8000.'));
+  }, []);
+
+  const handleClubInputChange = (e) => {
+    const { name, value } = e.target;
+    setClubInfo(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handlePersonalInputChange = (e) => {
+    const { name, value } = e.target;
+    setPersonalInfo(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    setError('');
+    if (file && (!file.name.toLowerCase().endsWith('.pdf') || file.size > 5 * 1024 * 1024)) {
+      setError('Choose a PDF resume smaller than 5 MB.');
+      e.target.value = '';
+      setPersonalInfo(prev => ({ ...prev, resumeFile: null }));
+      return;
+    }
+    setPersonalInfo(prev => ({
+      ...prev,
+      resumeFile: file
+    }));
+  };
+
+  const handleClubSubmit = (e) => {
+    e.preventDefault();
+    setCurrentStep(2);
+  };
+
+  const handlePersonalSubmit = (e) => {
+    e.preventDefault();
+    setCurrentStep(3);
+  };
+
+  const handleQuestionsUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setError('');
+    if (!file.name.toLowerCase().endsWith('.txt') || file.size > 100 * 1024) {
+      setError('Choose a plain-text (.txt) file smaller than 100 KB, with one question per line.');
+      e.target.value = '';
+      return;
+    }
+    try {
+      const questions = (await file.text()).split(/\r?\n/).map(q => q.trim()).filter(Boolean);
+      setShortAnswers({ questionsFile: file, questions: questions.length ? questions : [''] });
+    } catch {
+      setError('Could not read that questions file. Enter the questions manually.');
+    }
+  };
+
+  const handleQuestionChange = (index, value) => {
+    const newQuestions = [...shortAnswers.questions];
+    newQuestions[index] = value;
+    setShortAnswers(prev => ({
+      ...prev,
+      questions: newQuestions
+    }));
+  };
+
+  const addQuestion = () => {
+    setShortAnswers(prev => ({
+      ...prev,
+      questions: [...prev.questions, '']
+    }));
+  };
+
+  const handleFinalSubmit = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      setSuggestions(null);
+      const qs = (shortAnswers.questions || []).map(q => (q || '').trim()).filter(Boolean);
+      const jobDesc = `${clubInfo.position} position at ${clubInfo.clubName}, ${clubInfo.schoolName}${clubInfo.clubWebsite ? ' - ' + clubInfo.clubWebsite : ''}`;
+      const body = {
+        job_description: jobDesc,
+        questions: qs,
+        include_interview: clubInfo.applicationStage !== 'online-application',
+        website_url: clubInfo.clubWebsite || undefined,
+        instagram_url: clubInfo.clubInstagram || undefined,
+        club_name: clubInfo.clubName,
+        school_name: clubInfo.schoolName,
+      };
+      if (personalInfo.hasResume === false) {
+        body.resume_text = ['education', 'experiences', 'projects', 'skills', 'achievements']
+          .filter(key => personalInfo[key].trim())
+          .map(key => `${key}: ${personalInfo[key]}`).join('\n');
+      }
+      if (personalInfo.hasResume === true && personalInfo.resumeFile) {
+        const up = await ApiService.uploadFile('/upload/resume', personalInfo.resumeFile);
+        if (up && up.resume_text) {
+          body.resume_text = up.resume_text;
+        }
+      }
+      const resp = await ApiService.post('/agents/application-coach', body);
+      setSuggestions(resp);
+    } catch (e) {
+      console.error('Failed to generate suggestions', e);
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+
+
   const renderCurrentStep = () => {
     switch (currentStep) {
       case 1:
@@ -504,7 +560,7 @@ function App() {
           handleClubSubmit={handleClubSubmit} 
         />;
       case 2:
-        return <PersonalInfoPage />;
+        return <PersonalInfoPage personalInfo={personalInfo} setPersonalInfo={setPersonalInfo} handleFileUpload={handleFileUpload} handlePersonalSubmit={handlePersonalSubmit} handlePersonalInputChange={handlePersonalInputChange} clubInfo={clubInfo} setCurrentStep={setCurrentStep} />;
       case 3:
         return <ShortAnswersPage 
           shortAnswers={shortAnswers}
@@ -528,6 +584,8 @@ function App() {
   return (
     <div className="App">
       <div className="tech-bg"></div>
+      {runtime?.model_mode === 'offline' && <p role="status" style={{padding: 16, textAlign: 'center'}}>Offline demo — generic guidance only. No AI provider is connected.</p>}
+      {error && <p role="alert" style={{padding: 16, color: '#ffb4ab', textAlign: 'center'}}>{error}</p>}
       {renderCurrentStep()}
     </div>
   );

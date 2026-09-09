@@ -1,3 +1,4 @@
+// Unused top nav bar for the Dashboard flow; App.js renders its own inline headers instead.
 import React from 'react';
 
 const Header = () => {

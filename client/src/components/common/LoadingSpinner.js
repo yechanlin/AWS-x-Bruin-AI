@@ -1,3 +1,4 @@
+// Unused generic spinner used by the Dashboard's agent components while a request is in flight.
 import React from 'react';
 
 const LoadingSpinner = ({ message = 'Processing...' }) => {

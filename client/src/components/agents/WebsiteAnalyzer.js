@@ -1,3 +1,4 @@
+// Unused standalone UI for the website-analyzer agent, reachable only via the unused Dashboard - not part of App.js's active wizard.
 import React from 'react';
 import URLInput from '../tools/URLInput';
 import LoadingSpinner from '../common/LoadingSpinner';

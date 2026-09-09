@@ -1,3 +1,4 @@
+// Unused standalone UI for the application-coach agent, reachable only via the unused Dashboard - not part of App.js's active wizard.
 import React, { useState } from 'react';
 import FileUploader from '../tools/FileUploader';
 import LoadingSpinner from '../common/LoadingSpinner';

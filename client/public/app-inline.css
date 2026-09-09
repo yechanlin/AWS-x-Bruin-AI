@@ -121,3 +121,12 @@ body { background: #0a0a0a; color: #fff; }
   border-radius: 14px;
   padding: 16px 18px;
 }
+
+/* Collapsed-by-default results sections (interview prep, club research, resume
+   edits) - kept out of the way so the direct answer above them reads first. */
+.result-details { border: 1px solid rgba(120,119,198,0.3); border-radius: 8px; background: rgba(255,255,255,0.03); padding: 12px 16px; margin-bottom: 12px; }
+.result-details summary { cursor: pointer; list-style: none; font-weight: 600; font-size: 17px; color: #fff; display: flex; align-items: center; gap: 8px; }
+.result-details summary::-webkit-details-marker { display: none; }
+.result-details summary::before { content: '▸'; color: rgba(120,119,198,1); display: inline-block; transition: transform .15s ease; }
+.result-details[open] summary::before { transform: rotate(90deg); }
+.result-details summary:hover { color: rgba(255,119,198,1); }

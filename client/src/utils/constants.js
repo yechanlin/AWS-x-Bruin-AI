@@ -1,3 +1,4 @@
+// Agent type keys/display names and accepted file MIME types, used by the unused Dashboard flow.
 export const AGENT_TYPES = {
   RESUME_TAILOR: 'resume_tailor',
   INTERVIEW_COACH: 'interview_coach',

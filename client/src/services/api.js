@@ -1,19 +1,29 @@
+// Thin fetch wrapper (ApiService) used by App.js to call the FastAPI backend at REACT_APP_API_URL.
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 class ApiService {
   async request(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint}`;
+    const isUpload = options.body instanceof FormData;
     const config = {
+      ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...(isUpload ? {} : { 'Content-Type': 'application/json' }),
         ...options.headers,
       },
-      ...options,
     };
-
-    const response = await fetch(url, config);
+    let response;
+    try {
+      response = await fetch(url, config);
+    } catch {
+      throw new Error('Cannot reach the backend. Check that the API is running on port 8000.');
+    }
     if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
+      const body = await response.json().catch(() => ({}));
+      const detail = Array.isArray(body.detail)
+        ? body.detail.map(item => item.msg).join('; ')
+        : body.detail;
+      throw new Error(detail || `Request failed (${response.status}). Please try again.`);
     }
     return response.json();
   }
@@ -37,4 +47,5 @@ class ApiService {
   }
 }
 
-export default new ApiService();
+const apiService = new ApiService();
+export default apiService;

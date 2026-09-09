@@ -1,3 +1,4 @@
+// Unused hook backing FileUploader: validates file type and reads its content for preview.
 import { useState } from 'react';
 import { FILE_TYPES } from '../utils/constants';
 

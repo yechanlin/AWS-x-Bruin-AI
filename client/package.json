@@ -1,5 +1,6 @@
 {
   "name": "client",
+  "description": "React frontend for ClubApply Strands - the 3-step club-application wizard in src/App.js, talking to the FastAPI backend.",
   "version": "0.1.0",
   "private": true,
   "dependencies": {

@@ -1,3 +1,4 @@
+// Unused generic URL input with inline validation used by the Dashboard's agent components.
 import React, { useState } from 'react';
 
 const URLInput = ({ onUrlSubmit, placeholder = "Enter URL...", label = "URL" }) => {

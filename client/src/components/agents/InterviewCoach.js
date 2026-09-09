@@ -1,3 +1,4 @@
+// Unused standalone UI for the interview-coach agent, reachable only via the unused Dashboard - not part of App.js's active wizard.
 import React, { useState } from 'react';
 import LoadingSpinner from '../common/LoadingSpinner';
 import ResultsDisplay from '../tools/ResultsDisplay';

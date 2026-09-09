@@ -1,3 +1,4 @@
+// Unused generic result panel (string or pretty-printed JSON) used by the Dashboard's agent components.
 import React from 'react';
 
 const ResultsDisplay = ({ result, title = "Results" }) => {

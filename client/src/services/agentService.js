@@ -1,3 +1,4 @@
+// Per-agent API call helpers (tailorResume, coachInterview, etc.) used by the unused Dashboard flow, not by the active App.js.
 import ApiService from './api';
 
 export const agentService = {
